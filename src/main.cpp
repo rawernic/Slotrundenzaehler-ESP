@@ -28,8 +28,8 @@ void setup() {
     // WiFi verbinden
     connectWiFi();
 
-    // Optional: ESP-NOW aktivieren
-    // initEspNow();
+    // ESP-NOW aktivieren für Broadcast-Kommunikation
+    initEspNow();
 
     // Webserver starten
     initWebServer();
@@ -52,5 +52,6 @@ void setup() {
 //////////////////////////////////////////////////////////////////////////////////////////
 
 void loop() {
-    // Hauptschleife leer - alles läuft über Interrupts und Async-Webserver
+    // Pending ESP-NOW Broadcasts verarbeiten (3x mit 100ms Abstand)
+    processPendingBroadcast();
 }

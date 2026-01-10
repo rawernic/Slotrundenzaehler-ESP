@@ -1,4 +1,5 @@
 #include "lane_data.h"
+#include "espnow_comm.h"
 
 // Globale Instanzen
 LaneData lane1;
@@ -116,16 +117,37 @@ String getSecString(unsigned long millis_) {
 // Interrupt Service Routines
 //////////////////////////////////////////////////////////////////////////////////////////
 
+// Entprellung: Zeitpunkt des letzten gültigen Impulses pro Lane
+static volatile unsigned long lastTriggerLane1 = 0;
+static volatile unsigned long lastTriggerLane2 = 0;
+static const unsigned long DEBOUNCE_TIME_MS = 1000;  // 1 Sekunde Entprellzeit
+
 IRAM_ATTR void ZeitMessung_1() {
     if (raceStatus.paused) return;
 
     unsigned long currentTime = millis();
+
+    // Entprellung: Ignoriere Impulse innerhalb von 1 Sekunde
+    if (currentTime - lastTriggerLane1 < DEBOUNCE_TIME_MS) return;
+    lastTriggerLane1 = currentTime;
+
     lane1.recordLap(currentTime);
+
+    // Impuls per ESP-NOW an andere Controller broadcasten
+    broadcastEspNowData(1, currentTime);
 }
 
 IRAM_ATTR void ZeitMessung_2() {
     if (raceStatus.paused) return;
 
     unsigned long currentTime = millis();
+
+    // Entprellung: Ignoriere Impulse innerhalb von 1 Sekunde
+    if (currentTime - lastTriggerLane2 < DEBOUNCE_TIME_MS) return;
+    lastTriggerLane2 = currentTime;
+
     lane2.recordLap(currentTime);
+
+    // Impuls per ESP-NOW an andere Controller broadcasten
+    broadcastEspNowData(2, currentTime);
 }
