@@ -9,11 +9,11 @@ extern AsyncWebServer server;
 // Initialisierung
 void initWebServer();
 void connectWiFi();
-void updateMDNS();
+void startConfigPortal();
+bool tryConnectWiFi(const char* ssid, const char* password, int timeout_s);
 
 // Request Handler
 void handleRoot(AsyncWebServerRequest *request);
-void handleFavicon(AsyncWebServerRequest *request);
 void handleGetData(AsyncWebServerRequest *request);
 void handleLed(AsyncWebServerRequest *request);
 void handleResetLanes(AsyncWebServerRequest *request);
@@ -23,6 +23,10 @@ void handleZielMinuten(AsyncWebServerRequest *request);
 void handleFahrer(AsyncWebServerRequest *request);
 void handleSwaggerJson(AsyncWebServerRequest *request);
 void handleSwaggerUI(AsyncWebServerRequest *request);
+void handleWiFiConfig(AsyncWebServerRequest *request);
+void handleWiFiSave(AsyncWebServerRequest *request);
+void handleWiFiScan(AsyncWebServerRequest *request);
+void handleWiFiStatus(AsyncWebServerRequest *request);
 
 #endif // WEB_HANDLERS_H
 

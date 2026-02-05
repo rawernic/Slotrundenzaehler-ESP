@@ -6,14 +6,19 @@
 // Debug-Modus
 #define _DEBUG_
 
-// ESP-NOW Konfiguration
-#define ESP_WIFI_CHANNEL 1  // WiFi-Kanal für ESP-NOW
-
 // WiFi Konfiguration
 extern const char* WIFI_SSID;
 extern const char* WIFI_PASSWORD;
 
+// WiFi Manager
+extern String savedSSID;
+extern String savedPassword;
+bool loadWiFiConfig();
+void saveWiFiConfig(String ssid, String password);
+void clearWiFiConfig();
+
 // MAC Adressen für ESP-NOW
+extern uint8_t broadcastAddress[];
 extern uint8_t masterAddress1[];
 extern uint8_t sensorAddress1[];
 extern uint8_t sensorAddress2[];

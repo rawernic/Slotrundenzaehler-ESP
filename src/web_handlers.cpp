@@ -1,6 +1,7 @@
 #include "web_handlers.h"
 #include "html_content.h"
 #include "lane_data.h"
+#include "config.h"
 #include <ArduinoJson.h>
 
 #ifdef ESP32
@@ -23,29 +24,65 @@ static char buffer[2000];
 //////////////////////////////////////////////////////////////////////////////////////////
 
 void connectWiFi() {
-    WiFi.mode(WIFI_AP_STA);
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    Serial.println("=== WiFi Verbindung starten ===");
 
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(1000);
-        Serial.println("Waiting to connect...");
-    }
+    // Gespeicherte Konfiguration laden
+    bool hasConfig = loadWiFiConfig();
 
-    Serial.println("\nWiFi connected\n");
-    Serial.print("IP address: ");
-    Serial.println(WiFi.localIP());
-    Serial.print("Wi-Fi Channel: ");
-    Serial.println(WiFi.channel());
-    Serial.print("MAC Address: ");
-    Serial.println(WiFi.macAddress());
+    if (hasConfig && savedSSID.length() > 0) {
+        Serial.printf("Gespeicherte WiFi-Daten gefunden: %s\n", savedSSID.c_str());
 
-    // mDNS starten - Webseite erreichbar unter http://rundenzaehler.local
-    if (MDNS.begin("rundenzaehler")) {
-        Serial.println("mDNS gestartet: http://rundenzaehler.local");
-        MDNS.addService("http", "tcp", 80);
+        // Versuche mit gespeicherten Daten zu verbinden
+        if (tryConnectWiFi(savedSSID.c_str(), savedPassword.c_str(), 10)) {
+            // Erfolgreich verbunden
+            WiFi.mode(WIFI_AP_STA); // Bleibt im AP+STA Modus für Konfiguration
+
+            Serial.println("\n✓ WiFi erfolgreich verbunden");
+            Serial.print("IP Adresse: ");
+            Serial.println(WiFi.localIP());
+            Serial.print("Wi-Fi Channel: ");
+            Serial.println(WiFi.channel());
+            Serial.print("MAC Address: ");
+            Serial.println(WiFi.macAddress());
+
+            // mDNS starten
+            if (MDNS.begin("rundenzaehler")) {
+                Serial.println("mDNS gestartet: http://rundenzaehler.local");
+                MDNS.addService("http", "tcp", 80);
+            } else {
+                Serial.println("Fehler beim Starten von mDNS");
+            }
+
+            return;
+        } else {
+            Serial.println("⚠ Verbindung mit gespeicherten Daten fehlgeschlagen");
+        }
     } else {
-        Serial.println("Fehler beim Starten von mDNS");
+        Serial.println("ℹ Keine gespeicherten WiFi-Daten gefunden");
     }
+
+    // Fallback: Versuche mit Standard-Credentials
+    Serial.println("Versuche Verbindung mit Standard-Credentials...");
+    if (tryConnectWiFi(WIFI_SSID, WIFI_PASSWORD, 10)) {
+        WiFi.mode(WIFI_AP_STA);
+
+        Serial.println("\n✓ WiFi verbunden (Standard-Credentials)");
+        Serial.print("IP Adresse: ");
+        Serial.println(WiFi.localIP());
+
+        // mDNS starten
+        if (MDNS.begin("rundenzaehler")) {
+            Serial.println("mDNS gestartet: http://rundenzaehler.local");
+            MDNS.addService("http", "tcp", 80);
+        }
+
+        return;
+    }
+
+    // Kein WiFi funktioniert - Starte Config Portal
+    Serial.println("\n⚠ Keine WiFi-Verbindung möglich!");
+    Serial.println("→ Starte Konfigurations-Portal");
+    startConfigPortal();
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -277,6 +314,160 @@ void handleFavicon(AsyncWebServerRequest *request) {
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
+// WiFi Konfigurations-Handler
+//////////////////////////////////////////////////////////////////////////////////////////
+
+void handleWiFiConfig(AsyncWebServerRequest *request) {
+    Serial.println("WiFi Config Page angefordert");
+    request->send_P(200, "text/html", WIFI_CONFIG_PAGE);
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+
+void handleWiFiScan(AsyncWebServerRequest *request) {
+    Serial.println("WiFi Scan gestartet");
+
+    int n = WiFi.scanNetworks();
+    Serial.printf("Scan abgeschlossen. %d Netzwerke gefunden\n", n);
+
+    jsonDocument.clear();
+    JsonArray networks = jsonDocument.createNestedArray("networks");
+
+    for (int i = 0; i < n; i++) {
+        JsonObject network = networks.createNestedObject();
+        network["ssid"] = WiFi.SSID(i);
+        network["rssi"] = WiFi.RSSI(i);
+        network["encryption"] = (WiFi.encryptionType(i) ==
+#ifdef ESP32
+            WIFI_AUTH_OPEN
+#else
+            ENC_TYPE_NONE
+#endif
+            ) ? "open" : "secured";
+    }
+
+    serializeJson(jsonDocument, buffer);
+    request->send(200, "application/json", buffer);
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+
+void handleWiFiSave(AsyncWebServerRequest *request) {
+    Serial.println("WiFi Save angefordert");
+
+    if (!request->hasParam("ssid", true) || !request->hasParam("password", true)) {
+        jsonDocument.clear();
+        jsonDocument["success"] = false;
+        jsonDocument["message"] = "SSID und Passwort erforderlich";
+        serializeJson(jsonDocument, buffer);
+        request->send(400, "application/json", buffer);
+        return;
+    }
+
+    String ssid = request->getParam("ssid", true)->value();
+    String password = request->getParam("password", true)->value();
+
+    Serial.printf("Versuche Verbindung zu: %s\n", ssid.c_str());
+
+    // Konfiguration speichern
+    saveWiFiConfig(ssid, password);
+
+    // Versuche zu verbinden
+    bool connected = tryConnectWiFi(ssid.c_str(), password.c_str(), 15);
+
+    jsonDocument.clear();
+    jsonDocument["success"] = connected;
+
+    if (connected) {
+        jsonDocument["message"] = "Erfolgreich verbunden";
+        jsonDocument["ip"] = WiFi.localIP().toString();
+        Serial.println("WiFi erfolgreich verbunden!");
+    } else {
+        jsonDocument["message"] = "Verbindung fehlgeschlagen";
+        Serial.println("WiFi Verbindung fehlgeschlagen!");
+    }
+
+    serializeJson(jsonDocument, buffer);
+    request->send(200, "application/json", buffer);
+
+    if (connected) {
+        // Neustart nach erfolgreicher Verbindung
+        delay(2000);
+        ESP.restart();
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+
+void handleWiFiStatus(AsyncWebServerRequest *request) {
+    jsonDocument.clear();
+
+    bool isConnected = (WiFi.status() == WL_CONNECTED);
+
+    jsonDocument["connected"] = isConnected;
+
+    if (isConnected) {
+        jsonDocument["ssid"] = WiFi.SSID();
+        jsonDocument["ip"] = WiFi.localIP().toString();
+        jsonDocument["rssi"] = WiFi.RSSI();
+    } else {
+        jsonDocument["ssid"] = "";
+        jsonDocument["ip"] = "";
+    }
+
+    serializeJson(jsonDocument, buffer);
+    request->send(200, "application/json", buffer);
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+
+bool tryConnectWiFi(const char* ssid, const char* password, int timeout_s) {
+    Serial.printf("Verbinde mit WiFi: %s\n", ssid);
+
+    WiFi.disconnect();
+    delay(100);
+    WiFi.begin(ssid, password);
+
+    int attempts = 0;
+    int maxAttempts = timeout_s * 2; // 500ms pro Versuch
+
+    while (WiFi.status() != WL_CONNECTED && attempts < maxAttempts) {
+        delay(500);
+        Serial.print(".");
+        attempts++;
+    }
+
+    Serial.println();
+
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("WiFi verbunden!");
+        Serial.print("IP Adresse: ");
+        Serial.println(WiFi.localIP());
+        return true;
+    } else {
+        Serial.println("WiFi Verbindung fehlgeschlagen!");
+        return false;
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+
+void startConfigPortal() {
+    Serial.println("Starte Config Portal...");
+
+    // AP-Modus starten
+    WiFi.mode(WIFI_AP_STA);
+    WiFi.softAP("Rundenzaehler-Setup", "12345678");
+
+    IPAddress IP = WiFi.softAPIP();
+    Serial.print("AP IP Adresse: ");
+    Serial.println(IP);
+    Serial.println("Verbinde dich mit dem WiFi 'Rundenzaehler-Setup'");
+    Serial.println("Passwort: 12345678");
+    Serial.println("Dann öffne http://192.168.4.1/wifi/config");
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
 
 void initWebServer() {
     server.on("/", handleRoot);
@@ -291,6 +482,12 @@ void initWebServer() {
     server.on("/fahrer", handleFahrer);
     server.on("/swagger.json", handleSwaggerJson);
     server.on("/swaggerUI", handleSwaggerUI);
+
+    // WiFi Konfiguration
+    server.on("/wifi/config", handleWiFiConfig);
+    server.on("/wifi/scan", handleWiFiScan);
+    server.on("/wifi/save", HTTP_POST, handleWiFiSave);
+    server.on("/wifi/status", handleWiFiStatus);
 
     server.begin();
     Serial.println("Server listening");

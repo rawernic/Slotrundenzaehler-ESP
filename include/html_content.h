@@ -3,11 +3,14 @@
 
 #include <Arduino.h>
 
+// Hauptseite HTML
+extern const char MAIN_PAGE[] PROGMEM;
+
 // Favicon
 extern const char FAVICON_SVG[] PROGMEM;
 
-// Hauptseite HTML
-extern const char MAIN_PAGE[] PROGMEM;
+// WiFi Config Portal
+extern const char WIFI_CONFIG_PAGE[] PROGMEM;
 
 // Swagger API Dokumentation
 extern const char* SWAGGER_JSON;

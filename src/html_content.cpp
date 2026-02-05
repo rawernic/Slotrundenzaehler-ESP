@@ -230,7 +230,8 @@ i.md60px { font-size: 60px; }
   <col style="width:48%">
   <col style="width:2%">
   <col style="width:2%">
-  <col style="width:48%">
+  <col style="width:46%">
+  <col style="width:2%">
 <TR>
 <TH><span id="modus"></span></TH>
 <TH><button class="material-button" onclick="togglePlayPause()">
@@ -240,6 +241,9 @@ i.md60px { font-size: 60px; }
             <i class="material-symbols-outlined md60px" id="MODUS">stop_circle</i>
     </button></TH>
 <TH class="td-right"><span id="message"></span></TH>
+<TH><button class="material-button" onclick="window.location.href='/wifi/config'" title="WiFi Konfiguration">
+            <i class="material-symbols-outlined md60px">wifi</i>
+    </button></TH>
 </TR>
 </TABLE>
 </TD></TR>
@@ -649,4 +653,381 @@ document.addEventListener("keypress", function(event) {
 </SCRIPT>
 </html>
 )=="==";
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// WiFi Konfigurationsseite
+//////////////////////////////////////////////////////////////////////////////////////////
+
+const char WIFI_CONFIG_PAGE[] PROGMEM = R"=="==(
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WiFi Konfiguration - Rundenzähler</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 500px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .status.info {
+            background: #e3f2fd;
+            color: #1976d2;
+            border-left: 4px solid #1976d2;
+        }
+
+        .status.success {
+            background: #e8f5e9;
+            color: #388e3c;
+            border-left: 4px solid #388e3c;
+        }
+
+        .status.error {
+            background: #ffebee;
+            color: #c62828;
+            border-left: 4px solid #c62828;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            color: #555;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        input[type="text"],
+        input[type="password"],
+        select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: all 0.3s;
+            background: white;
+        }
+
+        input:focus,
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102,126,234,0.3);
+        }
+
+        .btn-secondary {
+            background: #f5f5f5;
+            color: #666;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .network-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .network-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.2s;
+        }
+
+        .network-item:hover {
+            background: #f5f5f5;
+        }
+
+        .network-item:last-child {
+            border-bottom: none;
+        }
+
+        .network-name {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .network-strength {
+            color: #666;
+            font-size: 12px;
+        }
+
+        .signal-icon {
+            margin-right: 10px;
+        }
+
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .current-wifi {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .current-wifi strong {
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏁 WiFi Konfiguration</h1>
+        <p class="subtitle">Rundenzähler ESP</p>
+
+        <div id="statusMessage" class="status"></div>
+
+        <div id="currentWifi" class="current-wifi" style="display: none;">
+            <strong>Aktuelle Verbindung:</strong> <span id="currentSsid"></span>
+        </div>
+
+        <div class="form-group">
+            <label>Verfügbare Netzwerke:</label>
+            <button class="btn btn-secondary" onclick="scanNetworks()">🔍 Netzwerke scannen</button>
+            <div id="networkList" class="network-list" style="display: none;"></div>
+        </div>
+
+        <form id="wifiForm" onsubmit="saveWifi(event)">
+            <div class="form-group">
+                <label for="ssid">WLAN-Name (SSID):</label>
+                <input type="text" id="ssid" name="ssid" required placeholder="Netzwerkname eingeben">
+            </div>
+
+            <div class="form-group">
+                <label for="password">Passwort:</label>
+                <input type="password" id="password" name="password" required placeholder="Passwort eingeben">
+            </div>
+
+            <button type="submit" class="btn btn-primary" id="saveBtn">💾 Speichern & Verbinden</button>
+            <button type="button" class="btn btn-secondary" onclick="goToMain()">↩️ Zur Hauptseite</button>
+        </form>
+    </div>
+
+    <script>
+        function showStatus(message, type) {
+            const statusEl = document.getElementById('statusMessage');
+            statusEl.textContent = message;
+            statusEl.className = 'status ' + type;
+            statusEl.style.display = 'block';
+
+            if (type === 'success') {
+                setTimeout(() => {
+                    statusEl.style.display = 'none';
+                }, 5000);
+            }
+        }
+
+        function scanNetworks() {
+            showStatus('Scanne nach Netzwerken...', 'info');
+            document.getElementById('networkList').innerHTML = '<div class="loader"></div>';
+            document.getElementById('networkList').style.display = 'block';
+
+            fetch('/wifi/scan')
+                .then(response => response.json())
+                .then(data => {
+                    const networkList = document.getElementById('networkList');
+                    networkList.innerHTML = '';
+
+                    if (data.networks && data.networks.length > 0) {
+                        data.networks.forEach(network => {
+                            const item = document.createElement('div');
+                            item.className = 'network-item';
+                            item.onclick = () => selectNetwork(network.ssid);
+
+                            const strength = network.rssi;
+                            let signalIcon = '📶';
+                            if (strength > -50) signalIcon = '📶📶📶';
+                            else if (strength > -70) signalIcon = '📶📶';
+
+                            item.innerHTML = `
+                                <span class="network-name">${signalIcon} ${network.ssid}</span>
+                                <span class="network-strength">${strength} dBm</span>
+                            `;
+                            networkList.appendChild(item);
+                        });
+                        showStatus(`${data.networks.length} Netzwerk(e) gefunden`, 'success');
+                    } else {
+                        networkList.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">Keine Netzwerke gefunden</div>';
+                        showStatus('Keine Netzwerke gefunden', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Scan-Fehler:', error);
+                    showStatus('Fehler beim Scannen: ' + error.message, 'error');
+                });
+        }
+
+        function selectNetwork(ssid) {
+            document.getElementById('ssid').value = ssid;
+            document.getElementById('password').focus();
+        }
+
+        function saveWifi(event) {
+            event.preventDefault();
+
+            const ssid = document.getElementById('ssid').value;
+            const password = document.getElementById('password').value;
+            const saveBtn = document.getElementById('saveBtn');
+
+            if (!ssid || !password) {
+                showStatus('Bitte SSID und Passwort eingeben', 'error');
+                return;
+            }
+
+            saveBtn.disabled = true;
+            saveBtn.textContent = '⏳ Verbinde...';
+            showStatus('Speichere Konfiguration und verbinde mit ' + ssid + '...', 'info');
+
+            fetch('/wifi/save', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `ssid=${encodeURIComponent(ssid)}&password=${encodeURIComponent(password)}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showStatus('✅ Erfolgreich verbunden! Gerät wird neu gestartet...', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 3000);
+                } else {
+                    showStatus('❌ Verbindung fehlgeschlagen: ' + (data.message || 'Unbekannter Fehler'), 'error');
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = '💾 Speichern & Verbinden';
+                }
+            })
+            .catch(error => {
+                console.error('Speichern-Fehler:', error);
+                showStatus('Fehler beim Speichern: ' + error.message, 'error');
+                saveBtn.disabled = false;
+                saveBtn.textContent = '💾 Speichern & Verbinden';
+            });
+        }
+
+        function checkStatus() {
+            fetch('/wifi/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.connected) {
+                        document.getElementById('currentWifi').style.display = 'block';
+                        document.getElementById('currentSsid').textContent = data.ssid + ' (' + data.ip + ')';
+                    }
+                })
+                .catch(error => console.error('Status-Fehler:', error));
+        }
+
+        function goToMain() {
+            window.location.href = '/';
+        }
+
+        // Status beim Laden prüfen
+        window.onload = function() {
+            checkStatus();
+            // Automatisch nach Netzwerken scannen
+            scanNetworks();
+        };
+    </script>
+</body>
+</html>
+)=="==";
+
+
 
