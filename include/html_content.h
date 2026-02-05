@@ -3,6 +3,9 @@
 
 #include <Arduino.h>
 
+// Favicon
+extern const char FAVICON_SVG[] PROGMEM;
+
 // Hauptseite HTML
 extern const char MAIN_PAGE[] PROGMEM;
 

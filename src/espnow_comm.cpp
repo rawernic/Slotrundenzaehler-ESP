@@ -1,7 +1,9 @@
 #include "espnow_comm.h"
 #include "lane_data.h"
-#include <ESP8266WiFi.h>
-#include <ArduinoJson.h>
+
+#ifdef ESP32
+    #include <esp_wifi.h>
+#endif
 
 // Globale Datenpakete
 DataPackage receivedData;
@@ -21,14 +23,185 @@ struct PendingBroadcast {
 
 static PendingBroadcast pendingBroadcast;
 
+// Broadcast-Adresse
+uint8_t broadcastAddressComm[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
 //////////////////////////////////////////////////////////////////////////////////////////
+// Callback Funktionen
+//////////////////////////////////////////////////////////////////////////////////////////
+
+#ifdef ESP32
+void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
+    Serial.print("ESP-NOW Send Status: ");
+    Serial.println(status == ESP_NOW_SEND_SUCCESS ? "OK" : "FEHLER");
+}
+#else
+void OnDataSent(uint8_t *mac_addr, uint8_t sendStatus) {
+    Serial.print("ESP-NOW Send Status: ");
+    Serial.println(sendStatus == 0 ? "OK" : "FEHLER");
+}
+#endif
+
+#ifdef ESP32
+void OnDataRecvFromSatellite(const uint8_t *mac_addr, const uint8_t *incomingData, int len) {
+#else
+void OnDataRecvFromSatellite(uint8_t *mac_addr, uint8_t *incomingData, uint8_t len) {
+#endif
+    Serial.print("ESP-NOW Empfangen von: ");
+    for (int i = 0; i < 6; i++) {
+        Serial.printf("%02X", mac_addr[i]);
+        if (i < 5) Serial.print(":");
+    }
+    Serial.println();
+
+    // Versuche JSON zu parsen
+    StaticJsonDocument<250> doc;
+    DeserializationError error = deserializeJson(doc, incomingData, len);
+
+    if (!error) {
+        const char* sensor = doc["sensor"] | "";
+        const char* messageType = doc["message_type"] | "";
+        int lane = doc["lane"] | 0;
+
+        Serial.print("JSON: sensor=");
+        Serial.print(sensor);
+        Serial.print(", message_type=");
+        Serial.print(messageType);
+        Serial.print(", lane=");
+        Serial.println(lane);
+
+        // Prüfe auf LapReset vom Master
+        if (strcmp(sensor, "master") == 0 && strcmp(messageType, "LapReset") == 0) {
+            if (lane == 1 || lane == 2) {
+                setLaneTimeOffset(lane, millis());
+                Serial.print(">>> LapReset für Lane ");
+                Serial.println(lane);
+            }
+        }
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// ESP-NOW Initialisierung
+//////////////////////////////////////////////////////////////////////////////////////////
+
+void initEspNow() {
+    // WiFi sollte bereits verbunden sein - wir nutzen den gleichen Kanal
+    int channel = WiFi.channel();
+    Serial.print("ESP-NOW nutzt WiFi-Kanal: ");
+    Serial.println(channel);
+
+#ifdef ESP32
+    // ESP32: Kanal wird automatisch vom WiFi übernommen
+    if (esp_now_init() != ESP_OK) {
+        Serial.println("ESP-NOW Init fehlgeschlagen!");
+        return;
+    }
+
+    esp_now_register_send_cb(OnDataSent);
+    esp_now_register_recv_cb(OnDataRecvFromSatellite);
+
+    // Broadcast Peer hinzufügen
+    esp_now_peer_info_t peerInfo = {};
+    memcpy(peerInfo.peer_addr, broadcastAddressComm, 6);
+    peerInfo.channel = channel;
+    peerInfo.encrypt = false;
+
+    if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+        Serial.println("ESP-NOW Peer hinzufügen fehlgeschlagen!");
+    }
+#else
+    // ESP8266: Kanal wird automatisch vom WiFi übernommen
+    if (esp_now_init() != 0) {
+        Serial.println("ESP-NOW Init fehlgeschlagen!");
+        return;
+    }
+
+    esp_now_set_self_role(ESP_NOW_ROLE_COMBO);
+    esp_now_register_send_cb(OnDataSent);
+    esp_now_register_recv_cb(OnDataRecvFromSatellite);
+
+    // Broadcast Peer hinzufügen (Kanal wird automatisch vom WiFi-Kanal übernommen)
+    if (esp_now_add_peer(broadcastAddressComm, ESP_NOW_ROLE_COMBO, channel, NULL, 0) != 0) {
+        Serial.println("ESP-NOW Peer hinzufügen fehlgeschlagen!");
+    }
+#endif
+
+    Serial.println("ESP-NOW initialisiert!");
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// ESP-NOW Senden
+//////////////////////////////////////////////////////////////////////////////////////////
+
+void sendEspNowData(byte lane, unsigned long time) {
+    sendData.lane_nr = lane;
+    sendData.time_ms = time;
+    strcpy(sendData.sensorType, "lane_sensor");
+
+#ifdef ESP32
+    esp_now_send(broadcastAddressComm, (uint8_t*)&sendData, sizeof(sendData));
+#else
+    esp_now_send(broadcastAddressComm, (uint8_t*)&sendData, sizeof(sendData));
+#endif
+}
+
+void broadcastEspNowData(byte lane, unsigned long time) {
+    messageIdCounter++;
+
+    // time ist die Rundenzeit in Millisekunden
+    unsigned long lapTime = time;
+
+    // Formatierte Rundenzeit: 3.999s
+    char lapTimeStr[16];
+    unsigned long lapSecs = lapTime / 1000;
+    int lapMillis = lapTime % 1000;
+    snprintf(lapTimeStr, sizeof(lapTimeStr), "%lu.%03d", lapSecs, lapMillis);
+
+    // Formatierte Zeitausgabe für Timestamp: 00:00:03.999
+    unsigned long allSeconds = lapTime / 1000;
+    int hours = allSeconds / 3600;
+    int minutes = (allSeconds % 3600) / 60;
+    int seconds = allSeconds % 60;
+    int milliSecs = lapTime % 1000;
+
+    char timestamp[16];
+    snprintf(timestamp, sizeof(timestamp), "%02d:%02d:%02d.%03d", hours, minutes, seconds, milliSecs);
+
+    // JSON-Dokument erstellen
+    StaticJsonDocument<250> doc;
+    doc["message_id"] = messageIdCounter;
+    doc["message_type"] = "lap_time";
+    doc["sensor"] = "lane_sensor";
+    doc["lane"] = lane;
+    doc["timestamp"] = timestamp;
+    doc["time_ms"] = lapTime;
+    doc["lapTime"] = lapTimeStr;
+    doc["lapTime_ms"] = lapTime;
+
+    // JSON serialisieren und in pending-Struktur speichern
+    serializeJson(doc, pendingBroadcast.jsonData, sizeof(pendingBroadcast.jsonData));
+
+    // Pending Broadcast aktivieren - wird 3x mit 100ms Abstand gesendet
+    pendingBroadcast.active = true;
+    pendingBroadcast.retryCount = 0;
+    pendingBroadcast.nextSendTime = millis();
+
+    Serial.print("ESP-NOW Broadcast queued: ");
+    Serial.println(pendingBroadcast.jsonData);
+}
 
 void processPendingBroadcast() {
     if (!pendingBroadcast.active) return;
 
     if (millis() >= pendingBroadcast.nextSendTime) {
-        esp_now_send(broadcastAddress, (uint8_t*)pendingBroadcast.jsonData,
+#ifdef ESP32
+        esp_now_send(broadcastAddressComm, (uint8_t*)pendingBroadcast.jsonData,
                      strlen(pendingBroadcast.jsonData) + 1);
+#else
+        esp_now_send(broadcastAddressComm, (uint8_t*)pendingBroadcast.jsonData,
+                     strlen(pendingBroadcast.jsonData) + 1);
+#endif
 
         pendingBroadcast.retryCount++;
 
@@ -40,11 +213,13 @@ void processPendingBroadcast() {
         if (pendingBroadcast.retryCount >= 3) {
             pendingBroadcast.active = false;
         } else {
-            pendingBroadcast.nextSendTime = millis() + 100; // 100ms = 1/10 Sekunde
+            pendingBroadcast.nextSendTime = millis() + 100;
         }
     }
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////
+// Hilfsfunktionen
 //////////////////////////////////////////////////////////////////////////////////////////
 
 bool compareMacAddress(uint8_t *left, uint8_t *right) {
@@ -52,147 +227,4 @@ bool compareMacAddress(uint8_t *left, uint8_t *right) {
         if (left[i] != right[i]) return false;
     }
     return true;
-}
-
-//////////////////////////////////////////////////////////////////////////////////////////
-
-void sendEspNowData(byte lane, unsigned long time) {
-    sendData.lane_nr = lane;
-    sendData.time_ms = time;
-
-    int result = esp_now_send(sensorAddress1, (uint8_t*)&sendData, sizeof(SendPackage));
-    result = esp_now_send(sensorAddress2, (uint8_t*)&sendData, sizeof(SendPackage));
-
-    if (result == 0) {
-        Serial.println("Sent with success");
-    } else {
-        Serial.println("Error sending the data");
-    }
-}
-
-//////////////////////////////////////////////////////////////////////////////////////////
-
-void broadcastEspNowData(byte lane, unsigned long time) {
-    // Message-ID erhöhen
-    messageIdCounter++;
-
-    // Formatierte Zeitausgabe: 00:00:03.999
-    unsigned long allSeconds = time / 1000;
-    int hours = allSeconds / 3600;
-    int minutes = (allSeconds % 3600) / 60;
-    int seconds = allSeconds % 60;
-    int milliSecs = time % 1000;
-
-    char timestamp[16];
-    snprintf(timestamp, sizeof(timestamp), "%02d:%02d:%02d.%03d", hours, minutes, seconds, milliSecs);
-
-    // Rundenzeit aus der entsprechenden Lane holen
-    unsigned long lapTime = 0;
-    if (lane == 1) {
-        lapTime = lane1.laps[0];  // Letzte Rundenzeit
-    } else if (lane == 2) {
-        lapTime = lane2.laps[0];  // Letzte Rundenzeit
-    }
-
-    // Formatierte Rundenzeit: 3.999s
-    char lapTimeStr[16];
-    unsigned long lapSecs = lapTime / 1000;
-    int lapMillis = lapTime % 1000;
-    snprintf(lapTimeStr, sizeof(lapTimeStr), "%lu.%03d", lapSecs, lapMillis);
-
-    // JSON-Dokument erstellen
-    StaticJsonDocument<250> doc;
-    doc["message_id"] = messageIdCounter;
-    doc["sensor"] = "master";
-    doc["lane"] = lane;
-    doc["timestamp"] = timestamp;
-    doc["time_ms"] = time;
-    doc["lapTime"] = lapTimeStr;
-    doc["lapTime_ms"] = lapTime;
-
-    // JSON serialisieren und in pending-Struktur speichern
-    serializeJson(doc, pendingBroadcast.jsonData, sizeof(pendingBroadcast.jsonData));
-
-    // Pending Broadcast aktivieren - wird 3x mit 100ms Abstand gesendet
-    pendingBroadcast.active = true;
-    pendingBroadcast.retryCount = 0;
-    pendingBroadcast.nextSendTime = millis(); // Sofort erstes Senden
-
-    Serial.print("ESP-NOW Broadcast queued: ");
-    Serial.println(pendingBroadcast.jsonData);
-}
-
-//////////////////////////////////////////////////////////////////////////////////////////
-
-void OnDataSent(uint8_t *mac_addr, uint8_t sendStatus) {
-    Serial.print("Last Packet Send Status: ");
-    if (sendStatus == 0) {
-        Serial.println("Delivery success");
-    } else {
-        Serial.println("Delivery fail");
-    }
-}
-
-//////////////////////////////////////////////////////////////////////////////////////////
-
-void OnDataRecvFromSatellite(uint8_t *mac_addr, uint8_t *incomingData, uint8_t len) {
-    memcpy(&receivedData, incomingData, sizeof(receivedData));
-    memcpy(&receivedFrom, mac_addr, sizeof(uint8_t) * 6);
-
-#ifdef _DEBUG_
-    char messageStr[100];
-    Serial.print("Packet received from: ");
-    snprintf(messageStr, sizeof(messageStr), "%02x:%02x:%02x:%02x:%02x:%02x Lane: %d Time: %lu ms",
-             mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5],
-             receivedData.lane_nr, receivedData.time_ms);
-    Serial.println(messageStr);
-#endif
-
-    // Zähler macht PAUSE
-    if (raceStatus.paused) return;
-    if (receivedData.lane_nr == 99) return;
-
-    if (receivedData.lane_nr == 1) {
-        lane1.recordLapPart(receivedData.time_ms);
-    }
-
-    if (receivedData.lane_nr == 2) {
-        lane2.recordLapPart(receivedData.time_ms);
-    }
-}
-
-//////////////////////////////////////////////////////////////////////////////////////////
-
-void initEspNow() {
-    Serial.println("Initializing ESP-NOW");
-
-    if (esp_now_init() != 0) {
-        Serial.println("Error initializing ESP-NOW");
-        return;
-    }
-
-    // Set ESP-NOW Role
-    esp_now_set_self_role(ESP_NOW_ROLE_COMBO);
-
-    // Register Broadcast Peer (für alle Geräte)
-    if (esp_now_add_peer(broadcastAddress, ESP_NOW_ROLE_COMBO, 1, NULL, 0) != 0) {
-        Serial.println("Failed to add broadcast peer");
-        return;
-    }
-
-    // Register peer SENSOR 1
-    if (esp_now_add_peer(sensorAddress1, ESP_NOW_ROLE_COMBO, 1, NULL, 0) != 0) {
-        Serial.println("Failed to add peer SENSOR 1");
-        return;
-    }
-
-    // Register peer SENSOR 2
-    if (esp_now_add_peer(sensorAddress2, ESP_NOW_ROLE_COMBO, 1, NULL, 0) != 0) {
-        Serial.println("Failed to add peer SENSOR 2");
-        return;
-    }
-
-    // Register receive callback
-    esp_now_register_recv_cb(OnDataRecvFromSatellite);
-    Serial.println("ESP-NOW initialized successfully");
 }

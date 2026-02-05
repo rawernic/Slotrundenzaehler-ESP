@@ -114,6 +114,18 @@ String getSecString(unsigned long millis_) {
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
+// Lane Time Offset
+//////////////////////////////////////////////////////////////////////////////////////////
+
+void setLaneTimeOffset(int lane, unsigned long offset) {
+    if (lane == 1) {
+        lane1.previousTime = offset;
+    } else if (lane == 2) {
+        lane2.previousTime = offset;
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
 // Interrupt Service Routines
 //////////////////////////////////////////////////////////////////////////////////////////
 
@@ -133,8 +145,10 @@ IRAM_ATTR void ZeitMessung_1() {
 
     lane1.recordLap(currentTime);
 
-    // Impuls per ESP-NOW an andere Controller broadcasten
-    broadcastEspNowData(1, currentTime);
+    // Impuls per ESP-NOW an andere Controller broadcasten - sende die Rundenzeit
+    if (lane1.laps[0] > 0) {  // Nur senden wenn eine Rundenzeit vorhanden ist
+        broadcastEspNowData(1, lane1.laps[0]);
+    }
 }
 
 IRAM_ATTR void ZeitMessung_2() {
@@ -148,6 +162,8 @@ IRAM_ATTR void ZeitMessung_2() {
 
     lane2.recordLap(currentTime);
 
-    // Impuls per ESP-NOW an andere Controller broadcasten
-    broadcastEspNowData(2, currentTime);
+    // Impuls per ESP-NOW an andere Controller broadcasten - sende die Rundenzeit
+    if (lane2.laps[0] > 0) {  // Nur senden wenn eine Rundenzeit vorhanden ist
+        broadcastEspNowData(2, lane2.laps[0]);
+    }
 }

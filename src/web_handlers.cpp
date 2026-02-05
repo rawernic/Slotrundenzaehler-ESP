@@ -1,8 +1,17 @@
 #include "web_handlers.h"
 #include "html_content.h"
 #include "lane_data.h"
-#include <ESP8266WiFi.h>
 #include <ArduinoJson.h>
+
+#ifdef ESP32
+    #include <WiFi.h>
+    #include <AsyncTCP.h>
+    #include <ESPmDNS.h>
+#else
+    #include <ESP8266WiFi.h>
+    #include <ESPAsyncTCP.h>
+    #include <ESP8266mDNS.h>
+#endif
 
 // Webserver Instanz
 AsyncWebServer server(80);
@@ -29,6 +38,23 @@ void connectWiFi() {
     Serial.println(WiFi.channel());
     Serial.print("MAC Address: ");
     Serial.println(WiFi.macAddress());
+
+    // mDNS starten - Webseite erreichbar unter http://rundenzaehler.local
+    if (MDNS.begin("rundenzaehler")) {
+        Serial.println("mDNS gestartet: http://rundenzaehler.local");
+        MDNS.addService("http", "tcp", 80);
+    } else {
+        Serial.println("Fehler beim Starten von mDNS");
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+
+void updateMDNS() {
+#ifndef ESP32
+    // mDNS update nur für ESP8266 notwendig
+    MDNS.update();
+#endif
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -232,8 +258,16 @@ void handleSwaggerUI(AsyncWebServerRequest *request) {
 
 //////////////////////////////////////////////////////////////////////////////////////////
 
+void handleFavicon(AsyncWebServerRequest *request) {
+    request->send_P(200, "image/svg+xml", FAVICON_SVG);
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+
 void initWebServer() {
     server.on("/", handleRoot);
+    server.on("/favicon.svg", handleFavicon);
+    server.on("/favicon.ico", handleFavicon);  // Fallback für Browser, die .ico erwarten
     server.on("/data", handleGetData);
     server.on("/led", handleLed);
     server.on("/reset", handleResetLanes);

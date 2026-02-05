@@ -45,6 +45,9 @@ extern RaceStatus raceStatus;
 String getTimeString(unsigned long millis_);
 String getSecString(unsigned long millis_);
 
+// Lane Time Offset setzen (für Synchronisation über ESP-NOW)
+void setLaneTimeOffset(int lane, unsigned long offset);
+
 // Interrupt Service Routines
 void IRAM_ATTR ZeitMessung_1();
 void IRAM_ATTR ZeitMessung_2();

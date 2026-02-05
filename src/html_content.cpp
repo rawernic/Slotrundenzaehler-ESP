@@ -1,6 +1,18 @@
 #include "html_content.h"
 
 //////////////////////////////////////////////////////////////////////////////////////////
+// Favicon (SVG - Rundenzaehler Logo)
+//////////////////////////////////////////////////////////////////////////////////////////
+
+const char FAVICON_SVG[] PROGMEM = R"(
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <circle cx="50" cy="50" r="50" fill="#000000"/>
+  <circle cx="50" cy="50" r="45" fill="none" stroke="#ff0000" stroke-width="7"/>
+  <text x="50" y="70" font-family="Arial, sans-serif" font-size="60" font-weight="bold" fill="#ff0000" text-anchor="middle">R</text>
+</svg>
+)";
+
+/////////////////////////////////////////////////////////////////////////////////////////
 // Swagger API Dokumentation
 //////////////////////////////////////////////////////////////////////////////////////////
 
@@ -16,7 +28,7 @@ const char MAIN_PAGE[] PROGMEM = R"=="==(
 <!DOCTYPE html>
 <html>
 <HEAD>
-    <title>Rundenz&aumlhler
+    <title>Rundenzaehler
     </title>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <link rel="stylesheet"
@@ -24,6 +36,12 @@ const char MAIN_PAGE[] PROGMEM = R"=="==(
 </HEAD>
 
 <STYLE>
+
+body {
+    background-color: #000000;
+    margin: 0px 0px;
+    padding: 0px 0px;
+}
 
 .html{
     width = 100%;
@@ -33,7 +51,8 @@ const char MAIN_PAGE[] PROGMEM = R"=="==(
 .card{
      min-width: 500px;
      min-height: 400px;
-     background: #02b875;
+     background: #000000;
+     border: 3px solid #ff0000;
      box-sizing: border-box;
      font-family: Arial, Helvetica, sans-serif;
      font-size: 40px;
@@ -46,10 +65,11 @@ const char MAIN_PAGE[] PROGMEM = R"=="==(
 
 .headcard{
     width = 100%;
-     background: #02b875;
+     background: #000000;
+     border: 3px solid #ff0000;
      box-sizing: border-box;
      font-family: Arial, Helvetica, sans-serif;
-     color: #FFF;
+     color: #ff0000;
      box-shadow: 0px 2px 18px -4px rgba(0,0,0,0.75);
      padding: 0px 12px;
      margin: 3px 3px;
@@ -72,7 +92,7 @@ td {
 }
 th {
   font-size: 50px;
-  background: #02b875;
+  background: #000000;
 }
 tr {
   width: 100%
@@ -106,8 +126,8 @@ input{
 .button {
   border-radius: 12px;
   font-size: 36px;
-  background-color: #02b875;
-  border: 0px solid white;
+  background-color: #000000;
+  border: 2px solid #ff0000;
      box-sizing: border-box;
      font-family: Arial, Helvetica, sans-serif;
      color: #FFF;
@@ -122,8 +142,8 @@ input{
 }
 .material-button {
   vertical-align:middle;
-  border: 0px solid white;
-  background-color: #02b875;
+  border: 0px solid transparent;
+  background-color: #000000;
   color: white;
   text-align: center;
   text-decoration: none;
@@ -137,8 +157,9 @@ input{
   'FILL' 0,
   'wght' 600,
   'GRAD' 200,
-  'opsz' 48
-  background-color: #02a875;
+  'opsz' 48;
+  background-color: #000000;
+  color: #ff0000;
 }
 
 /* The Modal (background) */
@@ -160,10 +181,10 @@ input{
 .modal-content {
   margin: auto;
   padding: 20px;
-  border: 1px solid #888;
+  border: 3px solid #ff0000;
   width: 60%;
-     background: #02b875;
-  background-color: #02b875;
+     background: #000000;
+  background-color: #000000;
      box-sizing: border-box;
      font-family: Arial, Helvetica, sans-serif;
      font-size: 40px;
@@ -192,6 +213,10 @@ input{
 i.md40px { font-size: 40px; }
 i.md50px { font-size: 44px; }
 i.md60px { font-size: 60px; }
+
+.lap-history {
+  color: #ff0000;
+}
 </STYLE>
 
 <BODY>
@@ -250,21 +275,21 @@ i.md60px { font-size: 60px; }
   <col style="width:33%">
   <col style="width:34%">
   <col style="width:33%">
-<TR><TD class="td-center"><span id="lane1_lap0">0.000</span></TD>
-    <TD class="td-center"><span id="lane1_lap5">0.000</span></TD>
-    <TD class="td-center"><span id="lane1_lap10">0.000</span></TD></TR>
-<TR><TD class="td-center"><span id="lane1_lap1">0.000</span></TD>
-    <TD class="td-center"><span id="lane1_lap6">0.000</span></TD>
-    <TD class="td-center"><span id="lane1_lap11">0.000</span></TD></TR>
-<TR><TD class="td-center"><span id="lane1_lap2">0.000</span></TD>
-    <TD class="td-center"><span id="lane1_lap7">0.000</span></TD>
-    <TD class="td-center"><span id="lane1_lap12">0.000</span></TD></TR>
-<TR><TD class="td-center"><span id="lane1_lap3">0.000</span></TD>
-    <TD class="td-center"><span id="lane1_lap8">0.000</span></TD>
-    <TD class="td-center"><span id="lane1_lap13">0.000</span></TD></TR>
-<TR><TD class="td-center"><span id="lane1_lap4">0.000</span></TD>
-    <TD class="td-center"><span id="lane1_lap9">0.000</span></TD>
-    <TD class="td-center"><span id="lane1_lap14">0.000</span></TD></TR>
+<TR><TD class="td-center"><span class="lap-history" id="lane1_lap0">0.000</span></TD>
+    <TD class="td-center"><span class="lap-history" id="lane1_lap5">0.000</span></TD>
+    <TD class="td-center"><span class="lap-history" id="lane1_lap10">0.000</span></TD></TR>
+<TR><TD class="td-center"><span class="lap-history" id="lane1_lap1">0.000</span></TD>
+    <TD class="td-center"><span class="lap-history" id="lane1_lap6">0.000</span></TD>
+    <TD class="td-center"><span class="lap-history" id="lane1_lap11">0.000</span></TD></TR>
+<TR><TD class="td-center"><span class="lap-history" id="lane1_lap2">0.000</span></TD>
+    <TD class="td-center"><span class="lap-history" id="lane1_lap7">0.000</span></TD>
+    <TD class="td-center"><span class="lap-history" id="lane1_lap12">0.000</span></TD></TR>
+<TR><TD class="td-center"><span class="lap-history" id="lane1_lap3">0.000</span></TD>
+    <TD class="td-center"><span class="lap-history" id="lane1_lap8">0.000</span></TD>
+    <TD class="td-center"><span class="lap-history" id="lane1_lap13">0.000</span></TD></TR>
+<TR><TD class="td-center"><span class="lap-history" id="lane1_lap4">0.000</span></TD>
+    <TD class="td-center"><span class="lap-history" id="lane1_lap9">0.000</span></TD>
+    <TD class="td-center"><span class="lap-history" id="lane1_lap14">0.000</span></TD></TR>
 </TABLE>
 
 </TD><TD><div class="card">
@@ -297,21 +322,21 @@ i.md60px { font-size: 60px; }
   <col style="width:33%">
   <col style="width:34%">
   <col style="width:33%">
-<TR><TD class="td-center"><span id="lane2_lap0">0.000</span></TD>
-    <TD class="td-center"><span id="lane2_lap5">0.000</span></TD>
-    <TD class="td-center"><span id="lane2_lap10">0.000</span></TD></TR>
-<TR><TD class="td-center"><span id="lane2_lap1">0.000</span></TD>
-    <TD class="td-center"><span id="lane2_lap6">0.000</span></TD>
-    <TD class="td-center"><span id="lane2_lap11">0.000</span></TD></TR>
-<TR><TD class="td-center"><span id="lane2_lap2">0.000</span></TD>
-    <TD class="td-center"><span id="lane2_lap7">0.000</span></TD>
-    <TD class="td-center"><span id="lane2_lap12">0.000</span></TD></TR>
-<TR><TD class="td-center"><span id="lane2_lap3">0.000</span></TD>
-    <TD class="td-center"><span id="lane2_lap8">0.000</span></TD>
-    <TD class="td-center"><span id="lane2_lap13">0.000</span></TD></TR>
-<TR><TD class="td-center"><span id="lane2_lap4">0.000</span></TD>
-    <TD class="td-center"><span id="lane2_lap9">0.000</span></TD>
-    <TD class="td-center"><span id="lane2_lap14">0.000</span></TD></TR>
+<TR><TD class="td-center"><span class="lap-history" id="lane2_lap0">0.000</span></TD>
+    <TD class="td-center"><span class="lap-history" id="lane2_lap5">0.000</span></TD>
+    <TD class="td-center"><span class="lap-history" id="lane2_lap10">0.000</span></TD></TR>
+<TR><TD class="td-center"><span class="lap-history" id="lane2_lap1">0.000</span></TD>
+    <TD class="td-center"><span class="lap-history" id="lane2_lap6">0.000</span></TD>
+    <TD class="td-center"><span class="lap-history" id="lane2_lap11">0.000</span></TD></TR>
+<TR><TD class="td-center"><span class="lap-history" id="lane2_lap2">0.000</span></TD>
+    <TD class="td-center"><span class="lap-history" id="lane2_lap7">0.000</span></TD>
+    <TD class="td-center"><span class="lap-history" id="lane2_lap12">0.000</span></TD></TR>
+<TR><TD class="td-center"><span class="lap-history" id="lane2_lap3">0.000</span></TD>
+    <TD class="td-center"><span class="lap-history" id="lane2_lap8">0.000</span></TD>
+    <TD class="td-center"><span class="lap-history" id="lane2_lap13">0.000</span></TD></TR>
+<TR><TD class="td-center"><span class="lap-history" id="lane2_lap4">0.000</span></TD>
+    <TD class="td-center"><span class="lap-history" id="lane2_lap9">0.000</span></TD>
+    <TD class="td-center"><span class="lap-history" id="lane2_lap14">0.000</span></TD></TR>
 </TABLE>
 </TABLE>
 

@@ -2,7 +2,15 @@
 #define ESPNOW_COMM_H
 
 #include <Arduino.h>
-#include <espnow.h>
+
+#ifdef ESP32
+    #include <esp_now.h>
+    #include <WiFi.h>
+#else
+    #include <espnow.h>
+    #include <ESP8266WiFi.h>
+#endif
+
 #include <ArduinoJson.h>
 
 // Max size of this struct is 250 bytes - ESP NOW buffer limit
@@ -34,9 +42,14 @@ void sendEspNowData(byte lane, unsigned long time);
 void broadcastEspNowData(byte lane, unsigned long time);
 void processPendingBroadcast();
 
-// Callback Funktionen
+// Callback Funktionen (Signaturen unterscheiden sich zwischen ESP8266 und ESP32)
+#ifdef ESP32
+void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status);
+void OnDataRecvFromSatellite(const uint8_t *mac_addr, const uint8_t *incomingData, int len);
+#else
 void OnDataSent(uint8_t *mac_addr, uint8_t sendStatus);
 void OnDataRecvFromSatellite(uint8_t *mac_addr, uint8_t *incomingData, uint8_t len);
+#endif
 
 // Hilfsfunktionen
 bool compareMacAddress(uint8_t *left, uint8_t *right);

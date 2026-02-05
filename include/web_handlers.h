@@ -9,9 +9,11 @@ extern AsyncWebServer server;
 // Initialisierung
 void initWebServer();
 void connectWiFi();
+void updateMDNS();
 
 // Request Handler
 void handleRoot(AsyncWebServerRequest *request);
+void handleFavicon(AsyncWebServerRequest *request);
 void handleGetData(AsyncWebServerRequest *request);
 void handleLed(AsyncWebServerRequest *request);
 void handleResetLanes(AsyncWebServerRequest *request);

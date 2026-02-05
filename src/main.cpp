@@ -1,5 +1,5 @@
 /**
- * SlotRundenzähler ESP8266
+ * SlotRundenzaehler ESP8266
  *
  * Modulare Architektur:
  * - config.h/cpp      : Konfiguration und Konstanten
@@ -19,7 +19,7 @@
 
 void setup() {
     Serial.begin(115200);
-    Serial.println("\n\n=== SlotRundenzähler ESP8266 ===\n");
+    Serial.println("\n\n=== SlotRundenzaehler ESP8266 ===\n");
 
     // LED initialisieren
     pinMode(LED_PIN, OUTPUT);
@@ -46,7 +46,7 @@ void setup() {
     lane1.driverName = "Fahrer1";
     lane2.driverName = "Fahrer2";
 
-    Serial.println("\nSetup abgeschlossen - Bereit zum Zählen!\n");
+    Serial.println("\nSetup abgeschlossen - Bereit zum Zaehlen!\n");
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -54,4 +54,7 @@ void setup() {
 void loop() {
     // Pending ESP-NOW Broadcasts verarbeiten (3x mit 100ms Abstand)
     processPendingBroadcast();
+
+    // mDNS update (nur für ESP8266 notwendig)
+    updateMDNS();
 }
