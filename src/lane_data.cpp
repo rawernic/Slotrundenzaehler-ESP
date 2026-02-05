@@ -22,6 +22,7 @@ void LaneData::reset() {
     fastestLap = 0;
     averageLap = 0;
     previousTime = 0;
+    newFastestLap = false;
 }
 
 void LaneData::recordLap(unsigned long currentTime) {
@@ -50,13 +51,15 @@ void LaneData::recordLap(unsigned long currentTime) {
     lapCount++;
     averageLap = totalTime / lapCount;
 
+    // Prüfe ob neue schnellste Runde
     if (fastestLap == 0 || fastestLap > lapTime) {
         fastestLap = lapTime;
+        newFastestLap = true;  // Flag setzen für Sound
+        Serial.print("Neue schnellste Runde! ");
+        Serial.println(lapTime);
     }
 
-    if ((unsigned long)lapCount == raceStatus.targetLaps) {
-        raceStatus.paused = true;
-    }
+    // Hinweis: Rennende wird in web_handlers.cpp geprüft, damit der Gewinner ermittelt werden kann
 }
 
 void LaneData::recordLapPart(unsigned long time) {
@@ -73,6 +76,7 @@ void LaneData::recordLapPart(unsigned long time) {
 
 void RaceStatus::reset() {
     paused = true;
+    raceFinished = false;
     targetLaps = 0;
     targetTime = 0;
     startTime = 0;
@@ -85,6 +89,7 @@ void RaceStatus::togglePlayPause() {
     } else {
         startTime = millis();
         paused = false;
+        raceFinished = false;  // Reset beim Neustart
     }
 }
 

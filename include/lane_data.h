@@ -17,6 +17,7 @@ struct LaneData {
     volatile int lapCount = 0;
     unsigned long previousTime = 0;
     String driverName = "Fahrer";
+    volatile bool newFastestLap = false;
 
     void reset();
     void recordLap(unsigned long currentTime);
@@ -26,6 +27,7 @@ struct LaneData {
 // Rennstatus
 struct RaceStatus {
     volatile bool paused = true;
+    volatile bool raceFinished = false;
     unsigned long startTime = 0;
     unsigned long runTime = 0;
     unsigned long targetTime = 0;

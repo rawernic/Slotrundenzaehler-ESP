@@ -154,11 +154,13 @@ void handleGetData(AsyncWebServerRequest *request) {
 
         if (raceStatus.runTime >= raceStatus.targetTime) {
             raceStatus.paused = true;
+            raceStatus.raceFinished = true;
             if (lane1.lapCount > lane2.lapCount) {
                 message = "((: the winner is " + lane1.driverName + " :))";
             } else {
                 message = "((: the winner is " + lane2.driverName + " :))";
             }
+            Serial.println("Zielzeit erreicht!");
         }
     }
 
@@ -167,13 +169,18 @@ void handleGetData(AsyncWebServerRequest *request) {
         message = getTimeString(raceStatus.runTime);
         modus = String(raceStatus.targetLaps) + " Runden";
 
-        if ((unsigned long)lane1.lapCount == raceStatus.targetLaps) {
+        // Prüfe ob eine Lane die Zielrunden erreicht hat (Gewinner)
+        if ((unsigned long)lane1.lapCount >= raceStatus.targetLaps) {
             raceStatus.paused = true;
+            raceStatus.raceFinished = true;
             message = "((: the winner is " + lane1.driverName + " :))";
+            Serial.println("Lane 1 hat die Zielrunden erreicht!");
         }
-        if ((unsigned long)lane2.lapCount == raceStatus.targetLaps) {
+        else if ((unsigned long)lane2.lapCount >= raceStatus.targetLaps) {
             raceStatus.paused = true;
+            raceStatus.raceFinished = true;
             message = "((: the winner is " + lane2.driverName + " :))";
+            Serial.println("Lane 2 hat die Zielrunden erreicht!");
         }
     }
 
@@ -181,6 +188,8 @@ void handleGetData(AsyncWebServerRequest *request) {
     JsonObject jsonLane1 = jsonDocument.createNestedObject("Lane_1");
     jsonLane1["modus"] = modus;
     jsonLane1["message"] = message;
+    jsonLane1["raceFinished"] = raceStatus.raceFinished;
+    jsonLane1["newFastestLap"] = lane1.newFastestLap;
     jsonLane1["fahrer"] = lane1.driverName;
     jsonLane1["lap_count"] = lane1.lapCount;
     jsonLane1["total_time"] = getTimeString(lane1.totalTime);
@@ -198,6 +207,7 @@ void handleGetData(AsyncWebServerRequest *request) {
 
     // Lane 2 Daten
     JsonObject jsonLane2 = jsonDocument.createNestedObject("Lane_2");
+    jsonLane2["newFastestLap"] = lane2.newFastestLap;
     jsonLane2["fahrer"] = lane2.driverName;
     jsonLane2["lap_count"] = lane2.lapCount;
     jsonLane2["total_time"] = getTimeString(lane2.totalTime);
@@ -215,6 +225,10 @@ void handleGetData(AsyncWebServerRequest *request) {
 
     serializeJsonPretty(jsonDocument, buffer);
     request->send(200, "application/json", buffer);
+
+    // Flags zurücksetzen nach dem Senden
+    lane1.newFastestLap = false;
+    lane2.newFastestLap = false;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////

@@ -389,6 +389,77 @@ Fahrer2</button> </div>
 
 <SCRIPT>
 
+var lastRaceFinishedState = false;
+
+// Glocken-Sound erzeugen
+function playBell() {
+  try {
+    var audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+    // Erste Glocke
+    playBellTone(audioContext, 800, 0, 0.3);
+    // Zweite Glocke
+    playBellTone(audioContext, 1000, 0.3, 0.3);
+    // Dritte Glocke
+    playBellTone(audioContext, 1200, 0.6, 0.5);
+
+    console.log("Glocke erklingt - Rennen beendet!");
+  } catch(e) {
+    console.log("Audio nicht unterstützt:", e);
+  }
+}
+
+function playBellTone(context, frequency, startTime, duration) {
+  var oscillator = context.createOscillator();
+  var gainNode = context.createGain();
+
+  oscillator.connect(gainNode);
+  gainNode.connect(context.destination);
+
+  oscillator.frequency.value = frequency;
+  oscillator.type = 'sine';
+
+  gainNode.gain.setValueAtTime(0.3, context.currentTime + startTime);
+  gainNode.gain.exponentialRampToValueAtTime(0.01, context.currentTime + startTime + duration);
+
+  oscillator.start(context.currentTime + startTime);
+  oscillator.stop(context.currentTime + startTime + duration);
+}
+
+// Fanfare-Sound für neue schnellste Runde
+function playFastestLapSound() {
+  try {
+    var audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+    // Aufsteigende Fanfare mit mehr Tönen
+    playFanfareTone(audioContext, 523, 0, 0.15);      // C
+    playFanfareTone(audioContext, 659, 0.15, 0.15);   // E
+    playFanfareTone(audioContext, 784, 0.3, 0.15);    // G
+    playFanfareTone(audioContext, 1047, 0.45, 0.4);   // C (höher) - länger
+
+    console.log("Neue schnellste Runde!");
+  } catch(e) {
+    console.log("Audio nicht unterstützt:", e);
+  }
+}
+
+function playFanfareTone(context, frequency, startTime, duration) {
+  var oscillator = context.createOscillator();
+  var gainNode = context.createGain();
+
+  oscillator.connect(gainNode);
+  gainNode.connect(context.destination);
+
+  oscillator.frequency.value = frequency;
+  oscillator.type = 'triangle';  // Weicherer Klang
+
+  gainNode.gain.setValueAtTime(0.2, context.currentTime + startTime);
+  gainNode.gain.exponentialRampToValueAtTime(0.01, context.currentTime + startTime + duration);
+
+  oscillator.start(context.currentTime + startTime);
+  oscillator.stop(context.currentTime + startTime + duration);
+}
+
 // Get the modal
 var modalFahrer1 = document.getElementById("myModalFahrer1");
 var modalFahrer2 = document.getElementById("myModalFahrer2");
@@ -497,6 +568,19 @@ function updateData() {
 
       document.getElementById("modus").innerHTML = data.Lane_1.modus;
       document.getElementById("message").innerHTML = data.Lane_1.message;
+
+      // Prüfe ob Rennen gerade beendet wurde
+      if (data.Lane_1.raceFinished && !lastRaceFinishedState) {
+        playBell();
+        lastRaceFinishedState = true;
+      } else if (!data.Lane_1.raceFinished) {
+        lastRaceFinishedState = false;
+      }
+
+      // Prüfe ob neue schnellste Runde gefahren wurde
+      if (data.Lane_1.newFastestLap || data.Lane_2.newFastestLap) {
+        playFastestLapSound();
+      }
 
       document.getElementById("fahrer_1").innerHTML = data.Lane_1.fahrer;
       document.getElementById("fahrer_2").innerHTML = data.Lane_2.fahrer;
